@@ -1,4 +1,4 @@
-package blivens.sudoku.solver2;
+package us.bliven.sudoku;
 
 import java.util.EventListener;
 

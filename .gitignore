@@ -1,1 +1,8 @@
+# java products
 *.class
+/target/
+
+# eclipse
+/.classpath
+/.project
+/.settings/

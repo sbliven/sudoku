@@ -1,7 +1,7 @@
 /**
  * 
  */
-package blivens.sudoku.solver2;
+package us.bliven.sudoku;
 
 import static java.awt.BorderLayout.CENTER;
 

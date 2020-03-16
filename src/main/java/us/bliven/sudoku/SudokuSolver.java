@@ -3,7 +3,7 @@
  * 
  * Created on Aug 24, 2005 by blivens
  */
-package blivens.sudoku.solver2;
+package us.bliven.sudoku;
 
 import java.awt.BorderLayout;
 import java.awt.GridLayout;

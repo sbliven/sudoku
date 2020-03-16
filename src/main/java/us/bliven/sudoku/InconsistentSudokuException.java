@@ -1,4 +1,4 @@
-package blivens.sudoku.solver2;
+package us.bliven.sudoku;
 
 /**
  * Indicates that the SudokuSolver has entered a logically inconsistent state.

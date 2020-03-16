@@ -1,7 +1,7 @@
 /**
  * 
  */
-package blivens.sudoku.solver2;
+package us.bliven.sudoku;
 
 import java.util.LinkedList;
 import java.util.List;
@@ -9,8 +9,6 @@ import java.util.List;
 import javax.swing.event.UndoableEditEvent;
 import javax.swing.event.UndoableEditListener;
 import javax.swing.undo.UndoableEdit;
-
-import static blivens.sudoku.solver2.SudokuSquareChangedListener.ChangeType.*;
 
 /**
  * @author blivens
@@ -67,7 +65,7 @@ public class SudokuSquare {
 		
 		// Notify Listeners
 		for(SudokuSquareChangedListener l : sscListeners) {
-			l.squareChanged(this, element, SELECTED);
+			l.squareChanged(this, element, SudokuSquareChangedListener.ChangeType.SELECTED);
 		}
 		
 		// Reject other elements
@@ -92,7 +90,7 @@ public class SudokuSquare {
 		
 		// Notify Listeners
 		for(SudokuSquareChangedListener l : sscListeners) {
-			l.squareChanged(this, element, REJECTED);
+			l.squareChanged(this, element, SudokuSquareChangedListener.ChangeType.REJECTED);
 		}
 	}
 	
@@ -158,7 +156,7 @@ public class SudokuSquare {
 
 		// Notify Listeners
 		for(SudokuSquareChangedListener l : sscListeners) {
-			l.squareChanged(this, null, RESET);
+			l.squareChanged(this, null, SudokuSquareChangedListener.ChangeType.RESET);
 		}
 	}
 
