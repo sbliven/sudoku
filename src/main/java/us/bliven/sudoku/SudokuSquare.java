@@ -8,7 +8,12 @@ import java.util.List;
 
 import javax.swing.event.UndoableEditEvent;
 import javax.swing.event.UndoableEditListener;
+import javax.swing.undo.AbstractUndoableEdit;
+import javax.swing.undo.CannotRedoException;
+import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoableEdit;
+
+import us.bliven.sudoku.SudokuSquareChangedListener.ChangeType;
 
 /**
  * @author blivens
@@ -47,6 +52,9 @@ public class SudokuSquare {
 	 * @return True on success. False if something else was already selected.
 	 */
 	public boolean select(Integer element) throws InconsistentSudokuException {
+		return select(element, true);
+	}
+	public boolean select(Integer element, boolean significant) throws InconsistentSudokuException {
 		// disallow duplicate selections
 		if(selected != null) {
 			if( selected.equals( element )) {
@@ -61,24 +69,49 @@ public class SudokuSquare {
 			throw new InconsistentSudokuException("Error: Cannot select "+element+" because it is not available.");
 		}
 		
+		
+		// Select
 		selected = element;
 		
 		// Notify Listeners
-		for(SudokuSquareChangedListener l : sscListeners) {
-			l.squareChanged(this, element, SudokuSquareChangedListener.ChangeType.SELECTED);
-		}
+		UndoableEdit edit = new SudokuEdit(ChangeType.SELECTED, element, significant);
+		fireUndoableEdit(edit);
 		
+		fireSudokuSquareChanged(element, SudokuSquareChangedListener.ChangeType.SELECTED);
+
 		// Reject other elements
 		for(Integer elem : SudokuSquare.Elements) {
-			if( !elem.equals( selected )) {
-				reject(elem);
+			if( !elem.equals( element )) {
+				reject(elem, false); //insignificant
 			}
 		}
-		
+
 		return true;
 	}
 	
+	public void unselect(Integer element) throws InconsistentSudokuException {
+		unselect(element, true);
+	}
+	public void unselect(Integer element, boolean significant) throws InconsistentSudokuException {
+		if(selected == null || !selected.equals(element)) {
+			throw new InconsistentSudokuException(String.format("Trying to unselect %s but previously selected %s", element, selected));
+		}
+		
+		// unselect
+		selected = null;
+		setAvailable(element, true);
+		
+		// notify listeners
+		//UndoableEdit edit = new SudokuEdit(ChangeType.UNSELECTED, element, significant);
+		//fireUndoableEdit(edit);
+		
+		fireSudokuSquareChanged(element, SudokuSquareChangedListener.ChangeType.UNSELECTED);
+	}
+	
 	public void reject(Integer element) throws InconsistentSudokuException {
+		reject(element, true);
+	}
+	public void reject(Integer element, boolean significant) throws InconsistentSudokuException {
 		if( element.equals(getSelected())) {
 			throw new InconsistentSudokuException("Error: Cannot reject "+element+" because it is selected.");
 		}
@@ -89,10 +122,45 @@ public class SudokuSquare {
 		setAvailable(element, false);
 		
 		// Notify Listeners
-		for(SudokuSquareChangedListener l : sscListeners) {
-			l.squareChanged(this, element, SudokuSquareChangedListener.ChangeType.REJECTED);
-		}
+		UndoableEdit edit = new SudokuEdit(ChangeType.REJECTED, element, significant);
+		fireUndoableEdit(edit);
+		
+		fireSudokuSquareChanged(element, SudokuSquareChangedListener.ChangeType.REJECTED);
 	}
+	
+	public void unreject(Integer element) throws InconsistentSudokuException {
+		unreject(element, true);
+	}
+	public void unreject(Integer element, boolean significant) throws InconsistentSudokuException {
+		if(selected != null && selected.equals(element)) {
+			throw new InconsistentSudokuException(String.format("Trying to unreject %s but previously selected %s", element, selected));
+		}
+		if(isAvailable(element) ) {
+			return; // Silently ignore previously available elements
+		}
+
+		// unselect
+		setAvailable(element, true);
+		
+		// notify listeners
+		//UndoableEdit edit = new SudokuEdit(ChangeType.UNREJECTED, element, significant);
+		//fireUndoableEdit(edit);
+		
+		fireSudokuSquareChanged(element, SudokuSquareChangedListener.ChangeType.UNREJECTED);
+	}
+
+	public void reset() {
+		selected = null;
+		available = new boolean[Elements.length];
+		for(int i=0;i< available.length; i++ )
+			available[i] = true;
+
+		// Notify Listeners
+		//fireUndoableEdit(new SudokuEdit(ChangeType.RESET, null, false));
+		fireSudokuSquareChanged(null, SudokuSquareChangedListener.ChangeType.RESET);
+
+	}
+	
 	
 	public Integer getSelected() {
 		return selected;
@@ -136,8 +204,7 @@ public class SudokuSquare {
 	}
 
 
-	public void fireUndoableEdit(UndoableEdit e) {
-		//TODO use this method
+	protected void fireUndoableEdit(UndoableEdit e) {
 		for(UndoableEditListener l : undoListeners) {
 			l.undoableEditHappened(new UndoableEditEvent(this,e));
 		}
@@ -146,20 +213,76 @@ public class SudokuSquare {
 		undoListeners.add(l);
 	}
 
-
-
-	public void reset() {
-		selected = null;
-		available = new boolean[Elements.length];
-		for(int i=0;i< available.length; i++ )
-			available[i] = true;
-
-		// Notify Listeners
+	protected void fireSudokuSquareChanged(Integer element, ChangeType type) {
 		for(SudokuSquareChangedListener l : sscListeners) {
-			l.squareChanged(this, null, SudokuSquareChangedListener.ChangeType.RESET);
+			l.squareChanged(this, element, type);
 		}
 	}
-
-
+	
+	protected class SudokuEdit extends AbstractUndoableEdit {
+		private static final long serialVersionUID = 2895214120901613335L;
+		
+		private Integer element;
+		private ChangeType type;
+		private boolean significant;
+		
+		public SudokuEdit(ChangeType type, Integer element, boolean significant) {
+			this.element = element;
+			this.type = type;
+			this.significant = significant;
+		}
+		
+		@Override
+		public String getPresentationName() {
+			return String.format("%s %s at %s,%s", type, element, getX(), getY());
+		}
+		
+		@Override
+		public boolean isSignificant() {
+			return this.significant;
+		}
+		
+		@Override
+		public void undo() throws CannotUndoException {
+			super.undo();
+			switch(type) {
+			case SELECTED:
+				unselect(element, false);
+				break;
+			case UNSELECTED:
+				select(element, false);
+				break;
+			case REJECTED:
+				unreject(element, false);
+				break;
+			case UNREJECTED:
+				reject(element, false);
+				break;
+			case RESET:
+				throw new CannotUndoException();
+			}
+		}
+		
+		@Override
+		public void redo() throws CannotRedoException {
+			super.redo();
+			switch(type) {
+			case SELECTED:
+				select(element, false);
+				break;
+			case UNSELECTED:
+				unselect(element, false);
+				break;
+			case REJECTED:
+				reject(element, false);
+				break;
+			case UNREJECTED:
+				unreject(element, false);
+				break;
+			case RESET:
+				throw new CannotRedoException();
+			}
+		}	
+	}
 	
 }

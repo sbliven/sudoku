@@ -18,7 +18,7 @@ import javax.swing.JPanel;
  * @author blivens
  *
  */
-public class SudokuDropdown extends JComboBox implements ActionListener, SudokuSquareChangedListener {
+public class SudokuDropdown extends JComboBox<String> implements ActionListener, SudokuSquareChangedListener {
 	private static final long serialVersionUID = -725336491223766575L;
 
 	private SudokuSquare model;
@@ -28,7 +28,7 @@ public class SudokuDropdown extends JComboBox implements ActionListener, SudokuS
 		super();
 		this.addItem(dummyItem);
 		for(Integer i :SudokuSquare.Elements) {
-			this.addItem(i);
+			this.addItem(i.toString());
 		}
 		this.setSelectedIndex(0);
 		this.addActionListener(this);
@@ -55,11 +55,11 @@ public class SudokuDropdown extends JComboBox implements ActionListener, SudokuS
 
 		if( (e.getModifiers() & (ActionEvent.SHIFT_MASK | ActionEvent.ALT_MASK | ActionEvent.META_MASK)) != 0) {
 			//removeItem();
-			model.reject((Integer)selectedItem);
+			model.reject((Integer)selectedItem, true);
 		}
 		else {
 			//selectItem();
-			model.select((Integer)selectedItem);
+			model.select((Integer)selectedItem, true);
 		}
 	}
 
@@ -69,14 +69,14 @@ public class SudokuDropdown extends JComboBox implements ActionListener, SudokuS
 		case SELECTED: {
 			//System.out.println("Selected "+element);
 			this.removeAllItems();
-			this.addItem(element);
+			this.addItem(element.toString());
 			this.setSelectedIndex(0);
 			break;
 		}
 		case REJECTED: {
 			//System.out.println("Rejected "+element);	
 			this.setSelectedIndex(0);
-			this.removeItem(element);		
+			this.removeItem(element.toString());		
 			break;
 		}
 		default:
@@ -105,7 +105,7 @@ public class SudokuDropdown extends JComboBox implements ActionListener, SudokuS
 
 		
 		// Test removing 4
-		ss.reject(SudokuSquare.Elements[4-1]);
+		ss.reject(SudokuSquare.Elements[4-1], true);
 
 	}
 

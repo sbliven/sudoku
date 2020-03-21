@@ -23,6 +23,10 @@ import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.KeyStroke;
+import javax.swing.event.UndoableEditEvent;
+import javax.swing.event.UndoableEditListener;
+import javax.swing.undo.CannotRedoException;
+import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoManager;
 
 
@@ -31,9 +35,11 @@ import javax.swing.undo.UndoManager;
  * @author Spencer Bliven
  */
 public class SudokuSolver implements SudokuSquareChangedListener {
-	private static final long serialVersionUID = -4653395471212077342L;
+	//private static final long serialVersionUID = -4653395471212077342L;
 	
-	private UndoManager undo;
+	protected UndoManager undo;
+    protected UndoAction undoAction;
+    protected RedoAction redoAction;
 	
 	/*
 	 * Index the hell out of the grid for simplicity
@@ -84,11 +90,19 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 		sectors = new SudokuSquare[9][9];
 		groupsForSquare = new HashMap<SudokuSquare,SudokuSquare[][]>(9*9, 1f); //Zero-collision hashing
 
+		UndoableEditListener undoListener = new UndoableEditListener() {
+			@Override
+			public void undoableEditHappened(UndoableEditEvent e) {
+		        undo.addEdit(e.getEdit());
+		        undoAction.updateUndoState();
+		        redoAction.updateRedoState();				
+			}
+		};
 		for(int r=0;r<9;r++)
 			for(int c=0;c<9;c++) {
 				SudokuSquare s = new SudokuSquare(c,r);
 				s.addSudokuSquareChangedListener(this);
-				s.addUndoableEditListener(undo);
+				s.addUndoableEditListener(undoListener);
 				
 				cols[c][r] = s;
 				rows[r][c] = s;
@@ -161,7 +175,7 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 		}
 		// Found single element
 		System.out.println("Single option "+singleOption+" from "+target.getX()+","+target.getY());
-		target.select(singleOption);
+		target.select(singleOption, false);
 	}
 	
 	
@@ -203,11 +217,13 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 		}
 		// Found single element
 		System.out.println("Single square for "+lastReject+" in this group.");
-		singleOption.select(lastReject);
+		singleOption.select(lastReject, false);
 	}
 
 	@Override
 	public void squareChanged(SudokuSquare target, Integer element, ChangeType changeType) {
+		System.out.println(changeType + " "+element+" from "+target.getX()+","+target.getY());
+
 		switch( changeType ) {
 		case SELECTED:
 			elementSelected(target,element);
@@ -215,30 +231,30 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 		case REJECTED:
 			elementRejected(target,element);
 			break;
+		case UNREJECTED:
+		case UNSELECTED:
 		case RESET:
 			//ignore
 			break;
+		default:
+			throw new UnsupportedOperationException();
 		}
 	}
 	
 	protected void elementSelected(SudokuSquare target, Integer element) {
-		System.out.println("Selected "+element+" from "+target.getX()+","+target.getY());
-
 		// Reject element from everything in target's groups
 		if(autoRejectWithinGroups) {
 			for(SudokuSquare[] group : groupsForSquare.get(target)) {
 				for(SudokuSquare s : group) {
 					if(s != target) {
-						s.reject(element);
+						s.reject(element, false);
 					}
 				}
 			}
 		}
 	}
 	
-	protected void elementRejected(SudokuSquare target, Integer element) {
-		//System.out.println("Rejected "+element+" from "+target.getX()+","+target.getY());
-		
+	protected void elementRejected(SudokuSquare target, Integer element) {		
 		//check for single choices
 		if(autoSelectLastOption) {
 			selectLastOption(target);
@@ -259,7 +275,7 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 	 * @param number Number to put in the square (1-9)
 	 */
 	public void setSquare(int column, int row, int number) {
-		cols[column-1][row-1].select(SudokuSquare.Elements[number-1]);
+		cols[column-1][row-1].select(SudokuSquare.Elements[number-1], false);
 		
 	}
 	
@@ -320,31 +336,19 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 		JMenu editMenu = new JMenu("Edit");
 		editMenu.setMnemonic(KeyEvent.VK_E);
 		menuBar.add(editMenu);
-		
-		Action undoAction = new AbstractAction("Undo") {
-			@Override
-			public void actionPerformed(ActionEvent arg0) {
-				undo.undo();
-			}
-		};
+				
+		undoAction = new UndoAction();
         undoAction.putValue(Action.SHORT_DESCRIPTION, "Undo Last Move");
         undoAction.putValue(Action.MNEMONIC_KEY, KeyEvent.VK_U);
         undoAction.putValue(Action.ACCELERATOR_KEY, KeyStroke.getKeyStroke( KeyEvent.VK_Z, shortcutKeyMask));
-        undoAction.setEnabled(undo.canUndo());
         
 		JMenuItem undoMenuItem = new JMenuItem(undoAction);
 		editMenu.add(undoMenuItem);
 		
-		Action redoAction = new AbstractAction("Redo") {
-			@Override
-			public void actionPerformed(ActionEvent arg0) {
-				undo.redo();
-			}
-		};
+		redoAction = new RedoAction();
         redoAction.putValue(Action.SHORT_DESCRIPTION, "Redo Last Move");
         redoAction.putValue(Action.MNEMONIC_KEY, KeyEvent.VK_R);
         redoAction.putValue(Action.ACCELERATOR_KEY, KeyStroke.getKeyStroke( KeyEvent.VK_Y, shortcutKeyMask));
-        redoAction.setEnabled(undo.canRedo());
         
 		JMenuItem redoMenuItem = new JMenuItem(redoAction);
 		editMenu.add(redoMenuItem);
@@ -458,6 +462,72 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 		this.setSquare(7, 9, 9);
 	}
 
+	class UndoAction extends AbstractAction {
+        /**
+		 * 
+		 */
+		private static final long serialVersionUID = 6124791851042096951L;
+
+		public UndoAction() {
+            super("Undo");
+            setEnabled(false);
+        }
+ 
+        public void actionPerformed(ActionEvent e) {
+            try {
+                undo.undo();
+            } catch (CannotUndoException ex) {
+                System.out.println("Unable to undo: " + ex);
+                ex.printStackTrace();
+            }
+            updateUndoState();
+            redoAction.updateRedoState();
+        }
+ 
+        protected void updateUndoState() {
+            if (undo.canUndo()) {
+                setEnabled(true);
+                putValue(Action.NAME, undo.getUndoPresentationName());
+            } else {
+                setEnabled(false);
+                putValue(Action.NAME, "Undo");
+            }
+        }
+    }
+ 
+    class RedoAction extends AbstractAction {
+        /**
+		 * 
+		 */
+		private static final long serialVersionUID = 3106594194738828746L;
+
+		public RedoAction() {
+            super("Redo");
+            setEnabled(false);
+        }
+ 
+        public void actionPerformed(ActionEvent e) {
+            try {
+                undo.redo();
+            } catch (CannotRedoException ex) {
+                System.out.println("Unable to redo: " + ex);
+                ex.printStackTrace();
+            }
+            updateRedoState();
+            undoAction.updateUndoState();
+        }
+ 
+        protected void updateRedoState() {
+            if (undo.canRedo()) {
+                setEnabled(true);
+                putValue(Action.NAME, undo.getRedoPresentationName());
+            } else {
+                setEnabled(false);
+                putValue(Action.NAME, "Redo");
+            }
+        }
+    }
+    
 	public static void main(String[] args) {
 		new SudokuSolver();
 	}
