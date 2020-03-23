@@ -79,13 +79,6 @@ public class SudokuSquare {
 		
 		fireSudokuSquareChanged(element, SudokuSquareChangedListener.ChangeType.SELECTED);
 
-		// Reject other elements
-		for(Integer elem : SudokuSquare.Elements) {
-			if( !elem.equals( element )) {
-				reject(elem, false); //insignificant
-			}
-		}
-
 		return true;
 	}
 	

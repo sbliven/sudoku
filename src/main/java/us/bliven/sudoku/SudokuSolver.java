@@ -10,7 +10,9 @@ import java.awt.GridLayout;
 import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import javax.swing.AbstractAction;
@@ -53,26 +55,14 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 	//private int[][] cols;
 	//private int[][][] boxes;//boxes[ col (0-2) ][ row (0-2) ][n]
 	
-	/*
-	 * Automation levels
-	 */
-	/**
-	 * After marking a square as solved, reject that number from everything that square's groups
-	 */
-	private boolean autoRejectWithinGroups;
-	/**
-	 * When only one possibility remains for a square, select it.
-	 */
-	private boolean autoSelectLastOption;
-	/**
-	 * When only once square in a group can support an element, select it.
-	 */
-	private boolean autoSelectLastInGroup;
+	private List<SudokuAlgorithm> algorithms;
 	
 	public SudokuSolver() {
-		autoRejectWithinGroups = true;
-		autoSelectLastOption = true;
-		autoSelectLastInGroup = true;
+		algorithms = new ArrayList<>();
+		addAlgorithm(new AutoRejectNotSelected());
+		addAlgorithm(new AutoRejectWithinGroups());
+		addAlgorithm(new AutoSelectLastOption());
+		addAlgorithm(new AutoSelectLastInGroup());
 		
 		undo = new UndoManager();
 		
@@ -95,7 +85,7 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 			public void undoableEditHappened(UndoableEditEvent e) {
 		        undo.addEdit(e.getEdit());
 		        undoAction.updateUndoState();
-		        redoAction.updateRedoState();				
+		        redoAction.updateRedoState();		
 			}
 		};
 		for(int r=0;r<9;r++)
@@ -126,6 +116,15 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 		frame.setVisible(true);
 	}
 		
+	private void addAlgorithm(SudokuAlgorithm alg) {
+		algorithms.add(alg);
+	}
+
+	public void setAlgorithmsEnabled(boolean enabled) {
+		for(SudokuAlgorithm alg : algorithms) {
+			alg.setEnabled(enabled);
+		}
+	}
 	/**
 	 * Generates Viewer to represent grid.
 	 * Elements are assumed to be indexed (column, row).
@@ -148,48 +147,8 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 			}
 		return sudoku;
 	}
-	
-
-	/**
-	 * If one element is available in target, select it.
-	 * @param target
-	 */
-	private void selectLastOption(SudokuSquare target) {
-		if(target.isSelected()) {
-			// Already selected
-			return;
-		}
-		Integer singleOption = null;
-		for(Integer elem : SudokuSquare.Elements) {
-			if(target.isAvailable(elem)) {
-				if( singleOption == null) { //first available elem
-					singleOption = elem;
-				} else { // 2+ available elems
-					return;
-				}
-			}
-		}
 		
-		if( singleOption == null ) {
-			throw new InconsistentSudokuException("No options left for "+target.getX()+","+target.getY());
-		}
-		// Found single element
-		System.out.println("Single option "+singleOption+" from "+target.getX()+","+target.getY());
-		target.select(singleOption, false);
-	}
-	
-	
-	private void selectLastInAllGroups(Integer element) {
-		for(SudokuSquare[] grp : rows) {
-			selectLastInGroup(grp, element);
-		}
-		for(SudokuSquare[] grp : cols) {
-			selectLastInGroup(grp, element);
-		}
-		for(SudokuSquare[] grp : sectors) {
-			selectLastInGroup(grp, element);
-		}
-	}
+
 	/**
 	 * Checks if grp contains only a single square in which lastReject is still available
 	 * @param grp
@@ -224,48 +183,11 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 	public void squareChanged(SudokuSquare target, Integer element, ChangeType changeType) {
 		System.out.println(changeType + " "+element+" from "+target.getX()+","+target.getY());
 
-		switch( changeType ) {
-		case SELECTED:
-			elementSelected(target,element);
-			break;
-		case REJECTED:
-			elementRejected(target,element);
-			break;
-		case UNREJECTED:
-		case UNSELECTED:
-		case RESET:
-			//ignore
-			break;
-		default:
-			throw new UnsupportedOperationException();
+		for(SudokuAlgorithm alg : algorithms) {
+			if(alg.isEnabled())
+				alg.squareChanged(target, element, changeType);
 		}
 	}
-	
-	protected void elementSelected(SudokuSquare target, Integer element) {
-		// Reject element from everything in target's groups
-		if(autoRejectWithinGroups) {
-			for(SudokuSquare[] group : groupsForSquare.get(target)) {
-				for(SudokuSquare s : group) {
-					if(s != target) {
-						s.reject(element, false);
-					}
-				}
-			}
-		}
-	}
-	
-	protected void elementRejected(SudokuSquare target, Integer element) {		
-		//check for single choices
-		if(autoSelectLastOption) {
-			selectLastOption(target);
-		}
-		
-		// check groups for single choices
-		if(autoSelectLastInGroup) {
-			selectLastInAllGroups(element);
-		}
-	}
-	
 
 	
 	/**
@@ -367,55 +289,24 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 		 * dispatches PropertyChangeEvents of some sort to the JCheckBoxMenuItems
 		 * whenever the model changes.
 		 */
-		JCheckBoxMenuItem autoRejectWithinGroupsMI = new JCheckBoxMenuItem();
-		autoRejectWithinGroupsMI.setSelected(autoRejectWithinGroups);
-		solverMenu.add(autoRejectWithinGroupsMI);
-		
-		Action autoRejectWithinGroupsAction = new AbstractAction("Reject options after a selection") {
-			@Override
-			public void actionPerformed(ActionEvent arg0) {
-				//TODO Toggling only works if this is the only place it can be changed
-				SudokuSolver.this.autoRejectWithinGroups = !SudokuSolver.this.autoRejectWithinGroups;
-				System.out.println("autoRejectWithinGroups = "+Boolean.toString(SudokuSolver.this.autoRejectWithinGroups));
-			}
-		};
-        autoRejectWithinGroupsAction.putValue(Action.SHORT_DESCRIPTION, "Reject options after a selection");
-        autoRejectWithinGroupsAction.putValue(Action.MNEMONIC_KEY, KeyEvent.VK_1);
-        autoRejectWithinGroupsMI.setAction(autoRejectWithinGroupsAction);
-        
-		
-		JCheckBoxMenuItem autoSelectLastOptionMI = new JCheckBoxMenuItem();
-		autoSelectLastOptionMI.setSelected(autoSelectLastInGroup);
-		solverMenu.add(autoSelectLastOptionMI);
-		
-		Action autoSelectLastOptionAction = new AbstractAction("Select the last remaining option") {
-			@Override
-			public void actionPerformed(ActionEvent arg0) {
-				//TODO Toggling only works if this is the only place it can be changed
-				SudokuSolver.this.autoSelectLastOption = !SudokuSolver.this.autoSelectLastOption;
-				System.out.println("autoSelectLastOption = "+Boolean.toString(SudokuSolver.this.autoSelectLastOption));
-			}
-		};
-        autoSelectLastOptionAction.putValue(Action.SHORT_DESCRIPTION, "Select the last remaining option");
-        autoSelectLastOptionAction.putValue(Action.MNEMONIC_KEY, KeyEvent.VK_2);
-        autoSelectLastOptionMI.setAction(autoSelectLastOptionAction);
+		for(SudokuAlgorithm alg : algorithms) {
+			if(alg.getMnemonic() != null) {
+				JCheckBoxMenuItem checkBox = new JCheckBoxMenuItem();
+				checkBox.setSelected(alg.isEnabled());
+				solverMenu.add(checkBox);
 
-		
-		JCheckBoxMenuItem autoSelectLastInGroupMI = new JCheckBoxMenuItem();
-		autoSelectLastInGroupMI.setSelected(autoSelectLastInGroup);
-		solverMenu.add(autoSelectLastInGroupMI);
-		
-		Action autoSelectLastInGroupAction = new AbstractAction("Detect when only one box is available") {
-			@Override
-			public void actionPerformed(ActionEvent arg0) {
-				//TODO Toggling only works if this is the only place it can be changed
-				SudokuSolver.this.autoSelectLastInGroup = !SudokuSolver.this.autoSelectLastInGroup;
-				System.out.println("autoSelectLastInGroup = "+Boolean.toString(SudokuSolver.this.autoSelectLastInGroup));
+				Action action = new AbstractAction(alg.getName()) {
+					@Override
+					public void actionPerformed(ActionEvent arg0) {
+						//TODO Toggling only works if this is the only place it can be changed
+						alg.setEnabled(!alg.isEnabled());
+					}
+				};
+				action.putValue(Action.SHORT_DESCRIPTION, alg.getName());
+				action.putValue(Action.MNEMONIC_KEY, alg.getMnemonic());
+				checkBox.setAction(action);
 			}
-		};
-        autoSelectLastInGroupAction.putValue(Action.SHORT_DESCRIPTION, "Detect when only one box is available");
-        autoSelectLastInGroupAction.putValue(Action.MNEMONIC_KEY, KeyEvent.VK_3);
-        autoSelectLastInGroupMI.setAction(autoSelectLastInGroupAction);
+		}
 		
 		return menuBar;
 	}
@@ -527,6 +418,123 @@ public class SudokuSolver implements SudokuSquareChangedListener {
             }
         }
     }
+    
+    /**
+	 * After marking a square as solved, reject that number from everything that square's groups
+	 */
+	public class AutoRejectWithinGroups extends AbstractSudokuAlgorithm {
+		public AutoRejectWithinGroups() {
+			super("Reject options after a selection");
+		}
+
+		@Override
+		public void squareChanged(SudokuSquare target, Integer element, ChangeType changeType) {
+			if(changeType == ChangeType.SELECTED) {
+				for(SudokuSquare[] group : groupsForSquare.get(target)) {
+					for(SudokuSquare s : group) {
+						if(s != target) {
+							s.reject(element, false);
+						}
+					}
+				}
+			}
+		}
+
+		@Override
+		public Integer getMnemonic() {
+			return KeyEvent.VK_1;
+		}
+	};
+	/**
+	 * When only one possibility remains for a square, select it.
+	 */
+	public class AutoSelectLastOption extends AbstractSudokuAlgorithm {
+		public AutoSelectLastOption() {
+			super("Select the last remaining option");
+		}
+
+		@Override
+		public void squareChanged(SudokuSquare target, Integer element, ChangeType changeType) {
+			if(changeType == ChangeType.REJECTED) {
+				if(target.isSelected()) {
+					// Already selected
+					return;
+				}
+				Integer singleOption = null;
+				for(Integer elem : SudokuSquare.Elements) {
+					if(target.isAvailable(elem)) {
+						if( singleOption == null) { //first available elem
+							singleOption = elem;
+						} else { // 2+ available elems
+							return;
+						}
+					}
+				}
+				
+				if( singleOption == null ) {
+					throw new InconsistentSudokuException("No options left for "+target.getX()+","+target.getY());
+				}
+				// Found single element
+				System.out.println("Single option "+singleOption+" from "+target.getX()+","+target.getY());
+				target.select(singleOption, false);
+			}
+		};
+		
+		@Override
+		public Integer getMnemonic() {
+			return KeyEvent.VK_2;
+		}
+	}
+		
+	/**
+	 * When only once square in a group can support an element, select it.
+	 */
+	public class AutoSelectLastInGroup extends AbstractSudokuAlgorithm {
+
+		public AutoSelectLastInGroup() {
+			super("Detect when only one box is available");
+		}
+
+		@Override
+		public void squareChanged(SudokuSquare target, Integer element, ChangeType changeType) {
+			if(changeType == ChangeType.REJECTED) {
+
+				for(SudokuSquare[] grp : rows) {
+					selectLastInGroup(grp, element);
+				}
+				for(SudokuSquare[] grp : cols) {
+					selectLastInGroup(grp, element);
+				}
+				for(SudokuSquare[] grp : sectors) {
+					selectLastInGroup(grp, element);
+				}
+			}
+		}
+		@Override
+		public Integer getMnemonic() {
+			return KeyEvent.VK_3;
+		}
+	};
+	
+	public class AutoRejectNotSelected extends AbstractSudokuAlgorithm {
+
+		public AutoRejectNotSelected() {
+			super("Selecting an option excludes other options");
+		}
+
+		@Override
+		public void squareChanged(SudokuSquare target, Integer element, ChangeType changeType) {
+			if(changeType == ChangeType.SELECTED) {
+				// Reject other elements
+				for(Integer elem : SudokuSquare.Elements) {
+					if( !elem.equals( element )) {
+						target.reject(elem, false); //insignificant
+					}
+				}
+			}
+		}
+		
+	}
     
 	public static void main(String[] args) {
 		new SudokuSolver();
