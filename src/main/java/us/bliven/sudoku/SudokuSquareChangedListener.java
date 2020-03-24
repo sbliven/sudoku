@@ -16,6 +16,7 @@ public interface SudokuSquareChangedListener extends EventListener {
 	 * @param target The SudokuSquare that changed
 	 * @param element The element selected or rejected, if applicable
 	 * @param changeType The type of change: SELECTED, REJECTED, etc.
+	 * @param chainChanges 
 	 */
-	public void squareChanged(SudokuSquare target, Integer element, ChangeType changeType);
+	public void squareChanged(SudokuSquare target, Integer element, ChangeType changeType, boolean chainChanges);
 }

@@ -76,7 +76,7 @@ public class SudokuGridSquare extends JPanel implements KeyListener, MouseListen
 	 * Respond to model changes
 	 */
 	@Override
-	public void squareChanged(SudokuSquare target, Integer element, ChangeType changeType) {
+	public void squareChanged(SudokuSquare target, Integer element, ChangeType changeType, boolean chainChanges) {
 		//System.out.println("Changed "+element+ " "+ changeType);
 		refresh();
 		/*setVisible(false);
@@ -147,7 +147,7 @@ public class SudokuGridSquare extends JPanel implements KeyListener, MouseListen
 		try {
 			int i = Integer.parseInt(e.getKeyChar()+"");
 			if(i>0) {
-				model.select(SudokuSquare.Elements[i-1], true);
+				model.select(SudokuSquare.Elements[i-1]);
 			}
 		} catch(NumberFormatException ex) {
 			//ignore keys besides 0-9
@@ -216,9 +216,9 @@ public class SudokuGridSquare extends JPanel implements KeyListener, MouseListen
 					| MouseEvent.SHIFT_DOWN_MASK
 					| MouseEvent.META_DOWN_MASK
 					| MouseEvent.ALT_DOWN_MASK )) != 0 ) {
-				model.reject(element, true);
+				model.reject(element);
 			} else {
-				model.select(element, true);
+				model.select(element);
 			}
 		}
 		@Override
@@ -263,8 +263,8 @@ public class SudokuGridSquare extends JPanel implements KeyListener, MouseListen
 
 		
 		// Test removing 4
-		model[1][2].reject(SudokuSquare.Elements[4-1], true);
-		model[2][0].select(SudokuSquare.Elements[7-1], true);
+		model[1][2].reject(SudokuSquare.Elements[4-1]);
+		model[2][0].select(SudokuSquare.Elements[7-1]);
 	}
 
 

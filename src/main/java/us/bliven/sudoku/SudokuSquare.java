@@ -52,9 +52,9 @@ public class SudokuSquare {
 	 * @return True on success. False if something else was already selected.
 	 */
 	public boolean select(Integer element) throws InconsistentSudokuException {
-		return select(element, true);
+		return select(element, true, true);
 	}
-	public boolean select(Integer element, boolean significant) throws InconsistentSudokuException {
+	public boolean select(Integer element, boolean significant, boolean chainChanges) throws InconsistentSudokuException {
 		// disallow duplicate selections
 		if(selected != null) {
 			if( selected.equals( element )) {
@@ -74,11 +74,20 @@ public class SudokuSquare {
 		selected = element;
 		
 		// Notify Listeners
-		UndoableEdit edit = new SudokuEdit(ChangeType.SELECTED, element, significant);
-		fireUndoableEdit(edit);
+		if(chainChanges) {
+			UndoableEdit edit = new SudokuEdit(ChangeType.SELECTED, element, significant);
+			fireUndoableEdit(edit);
+		}
 		
-		fireSudokuSquareChanged(element, SudokuSquareChangedListener.ChangeType.SELECTED);
-
+		fireSudokuSquareChanged(element, SudokuSquareChangedListener.ChangeType.SELECTED, chainChanges);
+		
+		if(chainChanges) {
+			for(Integer elem : SudokuSquare.Elements) {
+				if( !elem.equals( element )) {
+					reject(elem, false, chainChanges); //insignificant
+				}
+			}
+		}
 		return true;
 	}
 	
@@ -98,13 +107,13 @@ public class SudokuSquare {
 		//UndoableEdit edit = new SudokuEdit(ChangeType.UNSELECTED, element, significant);
 		//fireUndoableEdit(edit);
 		
-		fireSudokuSquareChanged(element, SudokuSquareChangedListener.ChangeType.UNSELECTED);
+		fireSudokuSquareChanged(element, SudokuSquareChangedListener.ChangeType.UNSELECTED, false);
 	}
 	
 	public void reject(Integer element) throws InconsistentSudokuException {
-		reject(element, true);
+		reject(element, true, true);
 	}
-	public void reject(Integer element, boolean significant) throws InconsistentSudokuException {
+	public void reject(Integer element, boolean significant, boolean chainChanges) throws InconsistentSudokuException {
 		if( element.equals(getSelected())) {
 			throw new InconsistentSudokuException("Error: Cannot reject "+element+" because it is selected.");
 		}
@@ -115,10 +124,11 @@ public class SudokuSquare {
 		setAvailable(element, false);
 		
 		// Notify Listeners
-		UndoableEdit edit = new SudokuEdit(ChangeType.REJECTED, element, significant);
-		fireUndoableEdit(edit);
-		
-		fireSudokuSquareChanged(element, SudokuSquareChangedListener.ChangeType.REJECTED);
+		if(chainChanges) {
+			UndoableEdit edit = new SudokuEdit(ChangeType.REJECTED, element, significant);
+			fireUndoableEdit(edit);
+		}
+		fireSudokuSquareChanged(element, SudokuSquareChangedListener.ChangeType.REJECTED, chainChanges);
 	}
 	
 	public void unreject(Integer element) throws InconsistentSudokuException {
@@ -139,7 +149,7 @@ public class SudokuSquare {
 		//UndoableEdit edit = new SudokuEdit(ChangeType.UNREJECTED, element, significant);
 		//fireUndoableEdit(edit);
 		
-		fireSudokuSquareChanged(element, SudokuSquareChangedListener.ChangeType.UNREJECTED);
+		fireSudokuSquareChanged(element, SudokuSquareChangedListener.ChangeType.UNREJECTED, false);
 	}
 
 	public void reset() {
@@ -150,7 +160,7 @@ public class SudokuSquare {
 
 		// Notify Listeners
 		//fireUndoableEdit(new SudokuEdit(ChangeType.RESET, null, false));
-		fireSudokuSquareChanged(null, SudokuSquareChangedListener.ChangeType.RESET);
+		fireSudokuSquareChanged(null, SudokuSquareChangedListener.ChangeType.RESET, false);
 
 	}
 	
@@ -206,9 +216,9 @@ public class SudokuSquare {
 		undoListeners.add(l);
 	}
 
-	protected void fireSudokuSquareChanged(Integer element, ChangeType type) {
+	protected void fireSudokuSquareChanged(Integer element, ChangeType type, boolean chainChanges) {
 		for(SudokuSquareChangedListener l : sscListeners) {
-			l.squareChanged(this, element, type);
+			l.squareChanged(this, element, type, chainChanges);
 		}
 	}
 	
@@ -243,13 +253,13 @@ public class SudokuSquare {
 				unselect(element, false);
 				break;
 			case UNSELECTED:
-				select(element, false);
+				select(element, false, false);
 				break;
 			case REJECTED:
 				unreject(element, false);
 				break;
 			case UNREJECTED:
-				reject(element, false);
+				reject(element, false, false);
 				break;
 			case RESET:
 				throw new CannotUndoException();
@@ -261,13 +271,13 @@ public class SudokuSquare {
 			super.redo();
 			switch(type) {
 			case SELECTED:
-				select(element, false);
+				select(element, false, false);
 				break;
 			case UNSELECTED:
 				unselect(element, false);
 				break;
 			case REJECTED:
-				reject(element, false);
+				reject(element, false, false);
 				break;
 			case UNREJECTED:
 				unreject(element, false);

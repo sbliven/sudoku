@@ -55,16 +55,16 @@ public class SudokuDropdown extends JComboBox<String> implements ActionListener,
 
 		if( (e.getModifiers() & (ActionEvent.SHIFT_MASK | ActionEvent.ALT_MASK | ActionEvent.META_MASK)) != 0) {
 			//removeItem();
-			model.reject((Integer)selectedItem, true);
+			model.reject((Integer)selectedItem);
 		}
 		else {
 			//selectItem();
-			model.select((Integer)selectedItem, true);
+			model.select((Integer)selectedItem);
 		}
 	}
 
 	@Override
-	public void squareChanged(SudokuSquare target, Integer element, ChangeType changeType) {
+	public void squareChanged(SudokuSquare target, Integer element, ChangeType changeType, boolean chainChanges) {
 		switch( changeType) {
 		case SELECTED: {
 			//System.out.println("Selected "+element);
@@ -105,7 +105,7 @@ public class SudokuDropdown extends JComboBox<String> implements ActionListener,
 
 		
 		// Test removing 4
-		ss.reject(SudokuSquare.Elements[4-1], true);
+		ss.reject(SudokuSquare.Elements[4-1]);
 
 	}
 

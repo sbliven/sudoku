@@ -59,7 +59,6 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 	
 	public SudokuSolver() {
 		algorithms = new ArrayList<>();
-		addAlgorithm(new AutoRejectNotSelected());
 		addAlgorithm(new AutoRejectWithinGroups());
 		addAlgorithm(new AutoSelectLastOption());
 		addAlgorithm(new AutoSelectLastInGroup());
@@ -176,16 +175,16 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 		}
 		// Found single element
 		System.out.println("Single square for "+lastReject+" in this group.");
-		singleOption.select(lastReject, false);
+		singleOption.select(lastReject, false, true);
 	}
 
 	@Override
-	public void squareChanged(SudokuSquare target, Integer element, ChangeType changeType) {
+	public void squareChanged(SudokuSquare target, Integer element, ChangeType changeType, boolean chainChanges) {
 		System.out.println(changeType + " "+element+" from "+target.getX()+","+target.getY());
 
 		for(SudokuAlgorithm alg : algorithms) {
 			if(alg.isEnabled())
-				alg.squareChanged(target, element, changeType);
+				alg.squareChanged(target, element, changeType, chainChanges);
 		}
 	}
 
@@ -197,7 +196,7 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 	 * @param number Number to put in the square (1-9)
 	 */
 	public void setSquare(int column, int row, int number) {
-		cols[column-1][row-1].select(SudokuSquare.Elements[number-1], false);
+		cols[column-1][row-1].select(SudokuSquare.Elements[number-1], false, true);
 		
 	}
 	
@@ -428,12 +427,12 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 		}
 
 		@Override
-		public void squareChanged(SudokuSquare target, Integer element, ChangeType changeType) {
-			if(changeType == ChangeType.SELECTED) {
+		public void squareChanged(SudokuSquare target, Integer element, ChangeType changeType, boolean chainChanges) {
+			if(chainChanges && changeType == ChangeType.SELECTED) {
 				for(SudokuSquare[] group : groupsForSquare.get(target)) {
 					for(SudokuSquare s : group) {
 						if(s != target) {
-							s.reject(element, false);
+							s.reject(element, false, true);
 						}
 					}
 				}
@@ -454,8 +453,8 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 		}
 
 		@Override
-		public void squareChanged(SudokuSquare target, Integer element, ChangeType changeType) {
-			if(changeType == ChangeType.REJECTED) {
+		public void squareChanged(SudokuSquare target, Integer element, ChangeType changeType, boolean chainChanges) {
+			if(chainChanges && changeType == ChangeType.REJECTED) {
 				if(target.isSelected()) {
 					// Already selected
 					return;
@@ -476,7 +475,7 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 				}
 				// Found single element
 				System.out.println("Single option "+singleOption+" from "+target.getX()+","+target.getY());
-				target.select(singleOption, false);
+				target.select(singleOption, false, true);
 			}
 		};
 		
@@ -496,8 +495,8 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 		}
 
 		@Override
-		public void squareChanged(SudokuSquare target, Integer element, ChangeType changeType) {
-			if(changeType == ChangeType.REJECTED) {
+		public void squareChanged(SudokuSquare target, Integer element, ChangeType changeType, boolean chainChanges) {
+			if(chainChanges && changeType == ChangeType.REJECTED) {
 
 				for(SudokuSquare[] grp : rows) {
 					selectLastInGroup(grp, element);
@@ -515,26 +514,6 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 			return KeyEvent.VK_3;
 		}
 	};
-	
-	public class AutoRejectNotSelected extends AbstractSudokuAlgorithm {
-
-		public AutoRejectNotSelected() {
-			super("Selecting an option excludes other options");
-		}
-
-		@Override
-		public void squareChanged(SudokuSquare target, Integer element, ChangeType changeType) {
-			if(changeType == ChangeType.SELECTED) {
-				// Reject other elements
-				for(Integer elem : SudokuSquare.Elements) {
-					if( !elem.equals( element )) {
-						target.reject(elem, false); //insignificant
-					}
-				}
-			}
-		}
-		
-	}
     
 	public static void main(String[] args) {
 		new SudokuSolver();
