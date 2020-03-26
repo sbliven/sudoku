@@ -1,6 +1,6 @@
 # Spencer's Sudoku
 
-![Screenshot of sudoku](docs/images/sample_game.png)
+<img src="docs/images/sample_game.png" alt="Screenshot of sudoku" width="500px">
 
 Solving Sudoku puzzles requires a combination of obvious pattern matching and more sophisticated logical induction. I find solving puzzles on paper frustratingly slow as I search methodically for well-established patterns. On the other hand, writing a backtracking algorithm to solve sudoku in mere milliseconds is easy enough for an introductory programming course.
 
