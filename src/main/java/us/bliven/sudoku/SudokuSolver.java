@@ -10,6 +10,14 @@ import java.awt.GridLayout;
 import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.Reader;
+import java.io.Writer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -19,14 +27,18 @@ import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.BorderFactory;
 import javax.swing.JCheckBoxMenuItem;
+import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.KeyStroke;
 import javax.swing.event.UndoableEditEvent;
 import javax.swing.event.UndoableEditListener;
+import javax.swing.filechooser.FileFilter;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoManager;
@@ -38,6 +50,8 @@ import javax.swing.undo.UndoManager;
  */
 public class SudokuSolver implements SudokuSquareChangedListener {
 	//private static final long serialVersionUID = -4653395471212077342L;
+	
+	private JFrame frame;
 	
 	protected UndoManager undo;
     protected UndoAction undoAction;
@@ -65,7 +79,7 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 		
 		undo = new UndoManager();
 		
-		JFrame frame = new JFrame("Sudoku Solver");
+		frame = new JFrame("Sudoku Solver");
 		
 		// Build Menu);
 		frame.setJMenuBar(buildMenu());
@@ -212,18 +226,44 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 		fileMenu.setMnemonic(KeyEvent.VK_F);
 		menuBar.add(fileMenu);
 
-		Action resetAction = new AbstractAction("Reset") {
+
+		Action resetAction = new AbstractAction("New") {
 			@Override
 			public void actionPerformed(ActionEvent arg0) {
 				SudokuSolver.this.reset();
 			}
 		};
-		resetAction.putValue(Action.SHORT_DESCRIPTION, "Reset Puzzle");
-		resetAction.putValue(Action.MNEMONIC_KEY, KeyEvent.VK_R);
-        resetAction.putValue(Action.ACCELERATOR_KEY, KeyStroke.getKeyStroke( KeyEvent.VK_R, shortcutKeyMask));
+		resetAction.putValue(Action.SHORT_DESCRIPTION, "New Puzzle");
+		resetAction.putValue(Action.MNEMONIC_KEY, KeyEvent.VK_N);
+        resetAction.putValue(Action.ACCELERATOR_KEY, KeyStroke.getKeyStroke( KeyEvent.VK_N, shortcutKeyMask));
         
         JMenuItem resetMenuItem = new JMenuItem(resetAction);
 		fileMenu.add(resetMenuItem);
+		
+		Action openAction = new AbstractAction("Open") {
+			public void actionPerformed(ActionEvent e) {
+				SudokuSolver.this.open();
+			};
+		};
+		openAction.putValue(Action.SHORT_DESCRIPTION, "Open");
+		openAction.putValue(Action.MNEMONIC_KEY, KeyEvent.VK_O);
+		openAction.putValue(Action.ACCELERATOR_KEY, KeyStroke.getKeyStroke( KeyEvent.VK_O, shortcutKeyMask));
+		
+		JMenuItem openMenuItem = new JMenuItem(openAction);
+		fileMenu.add(openMenuItem);
+		
+		Action saveAction = new AbstractAction("Save") {
+			public void actionPerformed(ActionEvent e) {
+				SudokuSolver.this.save();
+			};
+		};
+		saveAction.putValue(Action.SHORT_DESCRIPTION, "Save");
+		saveAction.putValue(Action.MNEMONIC_KEY, KeyEvent.VK_S);
+		saveAction.putValue(Action.ACCELERATOR_KEY, KeyStroke.getKeyStroke( KeyEvent.VK_S, shortcutKeyMask));
+		
+		JMenuItem saveMenuItem = new JMenuItem(saveAction);
+		fileMenu.add(saveMenuItem);
+		
 		
 		Action loadSample1Action = new AbstractAction("Load Sample Game") {
 			@Override
@@ -310,7 +350,91 @@ public class SudokuSolver implements SudokuSquareChangedListener {
 		return menuBar;
 	}
 	
-	protected void reset() {
+	public void save() {
+		final String DEFAULT_FILENAME = String.format("puzzle.%s",SudokuTextFormat.EXTENSIONS[0]);
+		JFileChooser fileChooser = new JFileChooser();
+		fileChooser.setDialogTitle("Save puzzle");
+		fileChooser.setDialogType(JFileChooser.SAVE_DIALOG);
+		fileChooser.setSelectedFile(new File(DEFAULT_FILENAME));
+	    FileFilter filter = new FileNameExtensionFilter(
+	    		String.format("Sudoku boards (%s)", String.join(", ", SudokuTextFormat.EXTENSIONS)),
+	    		SudokuTextFormat.EXTENSIONS);
+	    fileChooser.addChoosableFileFilter(filter);
+	    fileChooser.setFileFilter(filter);
+		 
+		int userSelection = fileChooser.showSaveDialog(frame);
+		 
+		if (userSelection == JFileChooser.APPROVE_OPTION) {
+		    File fileToSave = fileChooser.getSelectedFile();
+		    System.out.println("Save as file: " + fileToSave.getAbsolutePath());
+		    
+		    try(Writer writer = new BufferedWriter(new FileWriter(fileToSave))) {
+				SudokuTextFormat.write(writer, getSelectedGrid(), true, ' ');
+			} catch (IOException e) {
+				JOptionPane.showMessageDialog(frame,
+						String.format("Error saving to %s\n\n%s",fileToSave.getAbsolutePath(), e.getMessage()),
+						"Error Saving", JOptionPane.ERROR_MESSAGE);
+			}
+		}
+	}
+	public int[][] getSelectedGrid() {
+		int[][] board = new int[9][9];
+		
+		for(int row=0; row < 9; row++) {
+			for(int col=0; col < 9; col++) {
+				SudokuSquare square = rows[row][col];
+				if(square.isSelected()) {
+					board[row][col] = square.getSelected();
+				}
+			}
+		}
+		return board;
+	}
+
+	public void open() {
+		JFileChooser fileChooser = new JFileChooser();
+		fileChooser.setDialogTitle("Open puzzle");
+		fileChooser.setDialogType(JFileChooser.OPEN_DIALOG);
+	    FileFilter filter = new FileNameExtensionFilter(
+	    		String.format("Sudoku boards (%s)", String.join(", ", SudokuTextFormat.EXTENSIONS)),
+	    		SudokuTextFormat.EXTENSIONS);
+	    fileChooser.addChoosableFileFilter(filter);
+	    fileChooser.setFileFilter(filter);
+		 
+		int userSelection = fileChooser.showOpenDialog(frame);
+		 
+		if (userSelection == JFileChooser.APPROVE_OPTION) {
+		    File fileToOpen = fileChooser.getSelectedFile();
+		    System.out.println("Open file: " + fileToOpen.getAbsolutePath());
+		    
+		    int[][] grid;
+		    try(Reader reader = new BufferedReader(new FileReader(fileToOpen))) {
+				grid = SudokuTextFormat.read(reader);
+			} catch (IOException e) {
+				JOptionPane.showMessageDialog(frame,
+						String.format("Error opening %s\n\n%s",fileToOpen.getAbsolutePath(), e.getMessage()),
+						"Error Opening", JOptionPane.ERROR_MESSAGE);
+				return;
+			}
+		    
+			load(grid);
+		}
+
+	}
+
+	public void load(int[][] grid) {
+		reset();
+		
+		for(int row=0; row < 9; row++) {
+			for(int col=0; col < 9; col++) {
+				if(grid[row][col] > 0) {
+					setSquare(col+1, row+1, grid[row][col]);
+				}
+			}
+		}
+	}
+
+	public void reset() {
 		for(SudokuSquare[] col : cols) {
 			for(SudokuSquare square : col) {
 				square.reset();
